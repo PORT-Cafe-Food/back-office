@@ -1,32 +1,19 @@
-<h1> Hello from devcontainer-example!</h1>
+<?php
 
-<p>It's not super exciting, but this is being served from the webserver
-    container in our devcontainer.</p>
+require_once('./http/response.php');
+require_once('./http/router.php');
 
-<h2>Guestbook</h2>
+// Create an instance of the Router
+$router = new Router("/test");
 
-<table cellspacing="8">
-    <tr>
-        <th>Name</th>
-        <th>Visited</th>
-        <th>Note</th>
-    <tr>
+// Define routes
+$router->addRoute('GET', '/route1', function ($jsonData) {
+    return Response::send(200, ['message' => 'GET Route 1', 'data' => $jsonData]);
+});
 
-        <?php
+$router->addRoute('POST', '/route2', function ($jsonData) {
+    return Response::send(200, ['message' => 'POST Route 2', 'data' => $jsonData]);
+});
 
-        require_once('core/db.php');
-        $sql = "SELECT * FROM Customers WHERE customer_id = 3";
-        $result = $conn->query($sql);
-        if ($result->num_rows > 0) {
-            // output data of each row
-            echo "Customers: <br>";
-            // echo length($result);
 
-            while ($row = $result->fetch_assoc()) {
-                echo "id: " . $row["customer_id"] . " - Name: " . $row["fullname"] . " " . $row["address"] . "<br>";
-            }
-        } else {
-            echo "0 results";
-        }
-        ?>
-</table>
+echo $router->handleRequest($method, $path, $jsonData);

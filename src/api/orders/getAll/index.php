@@ -3,7 +3,7 @@
 // Include the database connection file
 // require_once('../../core/auth.php');
 require_once('../../../core/db.php');
-require_once('../../../core/ApiResponse.php');
+require_once('../../../core/Response.php');
 require_once('orderResponse.php');
 
 
@@ -115,8 +115,7 @@ try {
             return [new OrderResponse($order)];
         }, $data);
 
-        $response = new ApiResponse(true, $formattedResponse, null, 'Request successful');
-        echo $response->toJson();
+        echo new Response(true, $formattedResponse, null, 'Request successful');
     } else {
         // Handle the case where the query fails
         http_response_code(500);

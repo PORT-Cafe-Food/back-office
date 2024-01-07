@@ -3,7 +3,7 @@
 // Include the database connection file
 // require_once('../../core/auth.php');
 require_once('../../../core/db.php');
-require_once('../../../core/ApiResponse.php');
+require_once('../../../core/Response.php');
 require_once('requestData.php');
 // Get the JSON data from the POST request
 $jsonData = file_get_contents('php://input');
@@ -96,7 +96,7 @@ try {
 
     http_response_code(200);
     // return order id
-    $response = new ApiResponse(
+    $response = new Response(
         true,
         json_decode(json_encode(array("orderId" => $orderId))),
         null,

@@ -2,7 +2,7 @@
 
 // Include the database connection file
 require_once('../../../core/db.php');
-require_once('../../../core/ApiResponse.php');
+require_once('../../../core/Response.php');
 require_once('requestData.php');
 
 // Check if the request method is POST
@@ -69,7 +69,7 @@ if ($stmtInsert) {
     // Check if the insertion was successful
     if ($stmtInsert->affected_rows > 0) {
         http_response_code(201); // Created
-        $response = new ApiResponse(true, null, null, "Stuff created successfully.");
+        $response = new Response(true, null, null, "Stuff created successfully.");
         echo json_encode($response);
     } else {
         http_response_code(500); // Internal Server Error
