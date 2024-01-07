@@ -6,6 +6,7 @@ require_once('../../../core/db.php');
 // Function to check if the user is logged in
 function isLoggedIn()
 {
+    global $conn; // Include the global connection variable
     // Start or resume the session
     session_start();
 
