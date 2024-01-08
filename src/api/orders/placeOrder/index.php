@@ -14,7 +14,7 @@ function insertCustomer($conn, $customerData)
 
 function insertOrder($conn, $orderData, $customerId)
 {
-    $insertOrder = $conn->prepare("INSERT INTO orders (createdAt, type, tableNumber, customerId) VALUES (NOW(), ?, ?, ?)");
+    $insertOrder = $conn->prepare("INSERT INTO orders (createdAt, type, tableNumber, customerId, status) VALUES (NOW(), ?, ?, ?, 'pending')");
     $insertOrder->bind_param('ssi', $orderData['type'], $orderData['tableNumber'], $customerId);
     $insertOrder->execute();
     return $conn->insert_id; // Return the ID of the newly created order
@@ -22,25 +22,37 @@ function insertOrder($conn, $orderData, $customerId)
 
 function insertOrderItem($conn, $orderId, $item)
 {
+    $itemId = $item['itemId'];
+    $sizeId = $item['sizeId'];
+    $quantity = $item['quantity'];
+
+
     $insertOrderItem = $conn->prepare("INSERT INTO orderItems (orderId, itemId, sizeId, quantity) VALUES (?, ?, ?, ?)");
     if ($insertOrderItem === false) {
-        throw new Exception($conn->error);
+        echo ("Error preparing insertOrderItem statement: " . $conn->error); // Debugging line
+        return null;
     }
-    $insertOrderItem->bind_param('iiii', $orderId, $item['itemId'], $item['sizeId'], $item['quantity']);
-    $insertOrderItem->execute();
-    return $conn->insert_id; // Return the ID of the newly created order item
+    $insertOrderItem->bind_param('iiii', $orderId, $itemId, $sizeId, $quantity);
+
+    if ($insertOrderItem->execute()) {
+        $orderItemId = $conn->insert_id;
+        return $orderItemId;
+    } else {
+        error_log("Error executing insertOrderItem statement: " . $insertOrderItem->error); // Debugging line
+        return null;
+    }
 }
 
 function insertOrderOption($conn, $orderItemId, $optionId)
 {
     $insertOrderOption = $conn->prepare("INSERT INTO orderOptions (orderItemId, optionId) VALUES (?, ?)");
     if ($insertOrderOption === false) {
-        throw new Exception($conn->error);
+        throw new Exception("Order option insert failed: " . $conn->error);
     }
     $insertOrderOption->bind_param('ii', $orderItemId, $optionId);
     $insertOrderOption->execute();
     if ($insertOrderOption->affected_rows === 0) {
-        throw new Exception('Error inserting order option');
+        throw new Exception("No rows affected when inserting order option");
     }
 }
 
@@ -69,11 +81,11 @@ function placeOrder($conn, $orderData)
         foreach ($orderItems as $item) {
             $orderItemId = insertOrderItem($conn, $orderId, $item);
 
-            // Insert options for each item
             foreach ($item['options'] as $optionId) {
                 insertOrderOption($conn, $orderItemId, $optionId);
             }
         }
+
 
         $conn->commit(); // Commit the transaction
         return ['success' => true, 'message' => 'Order placed successfully', 'orderId' => $orderId];
