@@ -2,7 +2,7 @@
 // Define the Response class
 class Response
 {
-    public static function send($statusCode, $data = null, $headers = [], $cookies = [])
+    public static function send(int $statusCode, $data = null, $headers = [], $cookies = [])
     {
         // Send headers
         foreach ($headers as $name => $value) {

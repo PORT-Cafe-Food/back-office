@@ -3,7 +3,7 @@
 // Include the database connection file
 // require_once('../../core/auth.php');
 require_once('../../../core/db.php');
-require_once('../../../core/Response.php');
+require_once('../../../http/response.php');
 require_once('requestData.php');
 // Get the JSON data from the POST request
 $jsonData = file_get_contents('php://input');
@@ -96,13 +96,7 @@ try {
 
     http_response_code(200);
     // return order id
-    $response = new Response(
-        true,
-        json_decode(json_encode(array("orderId" => $orderId))),
-        null,
-        "Order created successfully."
-    );
-    echo $response->toJson();
+    return Response::send(200, ['orderId' => $orderId]);
 } catch (Exception $e) {
     // Rollback the transaction if any query fails
     $conn->rollback();

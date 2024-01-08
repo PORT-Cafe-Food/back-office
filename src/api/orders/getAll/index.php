@@ -3,7 +3,7 @@
 // Include the database connection file
 // require_once('../../core/auth.php');
 require_once('../../../core/db.php');
-require_once('../../../core/Response.php');
+require_once('../../../http/Response.php');
 require_once('orderResponse.php');
 
 
@@ -115,10 +115,10 @@ try {
             return [new OrderResponse($order)];
         }, $data);
 
-        echo new Response(true, $formattedResponse, null, 'Request successful');
+        return Response::send(200, $formattedResponse);
     } else {
         // Handle the case where the query fails
-        http_response_code(500);
+        return Response::send(500, ['message' => 'Error preparing or executing the database query']);
         die('Error preparing or executing the database query');
     }
 } catch (Exception $e) {

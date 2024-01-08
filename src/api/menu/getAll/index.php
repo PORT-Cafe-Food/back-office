@@ -1,44 +1,121 @@
 <?php
 
-try {
-    $url = "https://pos.globalfoodsoft.com/pos/menu";
+// Assuming $conn is your mysqli connection object
+include '../../../core/db.php';
 
-    // Set headers
-    $headers = [
-        "http" => [
-            "header" => "Authorization: E67nlcOGmU1Y6jwXOx\r\n" .
-                "Accept: application/json\r\n" .
-                "Glf-Api-Version: 2\r\n",
-        ],
-    ];
+// Function to get categories, items, options, and sizes
+function getCategoriesAndItems($conn)
+{
+    $result = ['categories' => []];
 
-    // Create a stream context with headers
-    $context = stream_context_create($headers);
+    try {
+        // Fetch categories
+        $categoriesQuery = $conn->query("SELECT * FROM categories");
+        if ($categoriesQuery) {
+            while ($category = $categoriesQuery->fetch_assoc()) {
+                $categoryId = $category['id'];
 
-    // Make the HTTP request and get the response
-    $response = file_get_contents($url, false, $context);
+                // Fetch items for each category
+                $itemsQuery = $conn->prepare("SELECT * FROM items WHERE categoryId = ?");
+                $itemsQuery->bind_param('i', $categoryId);
 
-    // Check for errors during the HTTP request
-    if ($response === false) {
-        throw new Exception('Error making HTTP request');
+                if ($itemsQuery->execute()) {
+                    $itemsResult = $itemsQuery->get_result();
+
+                    if ($itemsResult) {
+                        $items = $itemsResult->fetch_all(MYSQLI_ASSOC);
+
+                        // Loop through items
+                        $categoryItems = [];
+                        foreach ($items as $item) {
+                            $itemId = $item['id'];
+
+                            // Fetch options for each item
+                            $optionsQuery = $conn->prepare("SELECT * FROM options WHERE itemId = ?");
+                            $optionsQuery->bind_param('i', $itemId);
+
+                            if ($optionsQuery->execute()) {
+                                $optionsResult = $optionsQuery->get_result();
+
+                                if ($optionsResult) {
+                                    $options = $optionsResult->fetch_all(MYSQLI_ASSOC);
+
+                                    // Convert prices to float
+                                    foreach ($options as &$option) {
+                                        $option['price'] = floatval($option['price']);
+                                    }
+                                    unset($option); // Unset the reference to the last item
+
+                                    // Fetch sizes for each item
+                                    $sizesQuery = $conn->prepare("SELECT * FROM sizes WHERE itemId = ?");
+                                    $sizesQuery->bind_param('i', $itemId);
+
+                                    if ($sizesQuery->execute()) {
+                                        $sizesResult = $sizesQuery->get_result();
+
+                                        if ($sizesResult) {
+                                            $sizes = $sizesResult->fetch_all(MYSQLI_ASSOC);
+
+                                            // Build item structure with options and sizes
+                                            $itemStructure = [
+                                                'id' => $item['id'],
+                                                'name' => $item['name'],
+                                                'price' => floatval($item['price']),
+                                                'discount' => intval($item['discount']),
+                                                'availableDineIn' => boolval($item['availableDineIn']),
+                                                'availableDelivery' => boolval($item['availableDelivery']),
+                                                'availableTakeAway' => boolval($item['availableTakeAway']),
+                                                'description' => $item['description'],
+                                                'options' => $options,
+                                                'sizes' => $sizes
+                                            ];
+
+                                            $categoryItems[] = $itemStructure;
+                                        } else {
+                                            throw new Exception($sizesQuery->error);
+                                        }
+                                    } else {
+                                        throw new Exception($sizesQuery->error);
+                                    }
+                                } else {
+                                    throw new Exception($optionsQuery->error);
+                                }
+                            } else {
+                                throw new Exception($optionsQuery->error);
+                            }
+                        }
+
+                        // Build category structure
+                        $categoryStructure = [
+                            'id' => intval($categoryId),
+                            'name' => $category['name'],
+                            'items' => $categoryItems
+                        ];
+
+                        $result['categories'][] = $categoryStructure;
+                    } else {
+                        throw new Exception($itemsQuery->error);
+                    }
+                } else {
+                    throw new Exception($itemsQuery->error);
+                }
+
+                $itemsQuery->close();  // Close the prepared statement
+            }
+        } else {
+            throw new Exception($conn->error);
+        }
+    } catch (Exception $e) {
+        // Handle the exception (e.g., log, return an error response, etc.)
+        $result['error'] = $e->getMessage();
     }
 
-    // Decode the JSON response
-    $jsonResponse = json_decode($response, true);
-
-    // Check if JSON decoding was successful
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        throw new Exception('Error decoding JSON: ' . json_last_error_msg());
-    }
-
-    // Output the JSON response
-    echo json_encode($jsonResponse, JSON_PRETTY_PRINT);
-} catch (Exception $e) {
-    // Handle exceptions
-    $errorResponse = [
-        'status' => 'error',
-        'message' => 'Exception: ' . $e->getMessage(),
-    ];
-
-    echo json_encode($errorResponse, JSON_PRETTY_PRINT);
+    return $result;
 }
+
+// Get categories and items
+$data = getCategoriesAndItems($conn);
+
+// Respond with JSON
+header('Content-Type: application/json');
+echo json_encode($data, JSON_PRETTY_PRINT);
