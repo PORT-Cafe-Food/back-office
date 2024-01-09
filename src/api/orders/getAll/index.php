@@ -1,132 +1,83 @@
 <?php
 
-// Include the database connection file
-// require_once('../../core/auth.php');
-require_once('../../../core/db.php');
-require_once('../../../http/Response.php');
-require_once('orderResponse.php');
+include '../../../core/db.php'; // Path to your database connection file
 
-
-try {
-
-    // Get filter parameters from the query string
-    $isReady = isset($_GET['isReady']) ? filter_var($_GET['isReady'], FILTER_VALIDATE_BOOLEAN) : null;
-    $startDate = isset($_GET['startDate']) ? $_GET['startDate'] : null;
-    $endDate = isset($_GET['endDate']) ? $_GET['endDate'] : null;
-    $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
-    $pageSize = isset($_GET['pageSize']) ? max(1, intval($_GET['pageSize'])) : 10;
-    $orderType = isset($_GET['orderType']) ? $_GET['orderType'] : null;
-    // enable error reporting
-    error_reporting(E_ALL);
-    ini_set('display_errors', 1);
-
-    // Calculate the offset for pagination
+// Function to get all orders with pagination and filtering
+function getAllOrders($conn, $page = 1, $pageSize = 10, $statusFilter = null, $typeFilter = null, $kitchenDone = null)
+{
+    // Calculate the offset based on the page and pageSize
     $offset = ($page - 1) * $pageSize;
 
-    // Build the SQL query with dynamic filters and pagination
-    $sql = "SELECT
-            Orders.order_id,
-            Orders.orderType,
-            Orders.smsNotify,
-            Orders.deliveryFee,
-            Orders.timeToPrepare,
-            Orders.isReady,
-            Orders.createdAt AS orderCreatedAt,
-            Customers.fullname AS customerFullname,
-            Customers.phonenumber AS customerPhonenumber,
-            Customers.address AS customerAddress,
-            Customers.houseNumber AS customerHouseNumber,
-            Customers.floorNumber AS customerFloorNumber,
-            Customers.apartmentNumber AS customerApartmentNumber,
-            Customers.addressDescription AS customerAddressDescription,
-            Items.item_id AS itemId,
-            Items.name AS itemName,
-            Items.price AS itemPrice,
-            OrderDetails.quantity,
-            OrderDetails.total_price AS orderDetailsTotalPrice,
-            OrderDetails.size,
-            OrderDetails.options,
-            OrderDetails.description,
-            OrderDetails.category_id
-        FROM Orders
-        JOIN Customers ON Orders.customer_id = Customers.customer_id
-        JOIN OrderDetails ON Orders.order_id = OrderDetails.order_id
-        JOIN Items ON OrderDetails.item_id = Items.item_id
-        WHERE 1";
+    // Build the SQL query with filters
+    $sql = "SELECT * FROM orders WHERE 1=1";
 
-    // Apply filters
-    if ($isReady !== null) {
-        $sql .= " AND Orders.isReady = ?";
+    $bindParams = [];
+
+    if ($statusFilter !== null) {
+        $sql .= " AND status = ?";
+        $bindParams[] = $statusFilter;
     }
 
-    if ($startDate !== null) {
-        $sql .= " AND Orders.createdAt >= ?";
+    if ($typeFilter !== null) {
+        $sql .= " AND type = ?";
+        $bindParams[] = $typeFilter;
     }
 
-    if ($endDate !== null) {
-        $sql .= " AND Orders.createdAt <= ?";
+    if ($kitchenDone !== null) {
+        $sql .= " AND kitchenDone = 1";
     }
 
-    if ($orderType !== null) {
-        $sql .= " AND Orders.orderType = ?";
-    }
+    // Add sorting by createdAt
+    $sql .= " ORDER BY createdAt DESC";
 
-    // Apply pagination
-    $sql .= " ORDER BY Orders.createdAt DESC LIMIT ?, ?";
+    // Add LIMIT and OFFSET for pagination
+    $sql .= " LIMIT ? OFFSET ?";
+    $bindParams[] = $pageSize;
+    $bindParams[] = $offset;
 
-    // Prepare and bind parameters
     $stmt = $conn->prepare($sql);
 
-    if ($stmt) {
-        // Bind parameters based on their types
-        $bindTypes = '';
-        $bindValues = [];
+    // Bind parameters dynamically
+    $paramTypes = str_repeat('s', count($bindParams));
+    $stmt->bind_param($paramTypes, ...$bindParams);
 
-        if ($isReady !== null) {
-            $bindTypes .= 'i';
-            $bindValues[] = $isReady;
-        }
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-        if ($startDate !== null) {
-            $bindTypes .= 's';
-            $bindValues[] = $startDate;
-        }
+    // Calculate the total number of orders (unfiltered)
+    $totalOrdersQuery = $conn->query("SELECT COUNT(*) AS totalOrders FROM orders");
+    $totalOrders = $totalOrdersQuery->fetch_assoc()['totalOrders'];
 
-        if ($endDate !== null) {
-            $bindTypes .= 's';
-            $bindValues[] = $endDate;
-        }
+    // Calculate the number of pages
+    $totalPages = ceil($totalOrders / $pageSize);
 
-        $bindTypes .= 'ii';
-        $bindValues[] = $offset;
-        $bindValues[] = $pageSize;
+    // Create an array to store the orders
+    $orders = [];
 
-        $stmt->bind_param($bindTypes, ...$bindValues);
-        $stmt->execute();
-
-        // Get result set
-        $result = $stmt->get_result();
-
-        // Fetch the results
-        $data = $result->fetch_all(MYSQLI_ASSOC);
-
-        // Format the response
-        $formattedResponse = array_map(function ($order) {
-            return [new OrderResponse($order)];
-        }, $data);
-
-        return Response::send(200, $formattedResponse);
-    } else {
-        // Handle the case where the query fails
-        return Response::send(500, ['message' => 'Error preparing or executing the database query']);
-        die('Error preparing or executing the database query');
+    while ($row = $result->fetch_assoc()) {
+        $orders[] = $row;
     }
-} catch (Exception $e) {
-    // Handle exceptions
-    http_response_code(500);
-    die('Error: ' . $e->getMessage());
+
+    return [
+        'currentPage' => $page,
+        'pageSize' => $pageSize,
+        'totalPages' => $totalPages,
+        'orders' => $orders,
+    ];
 }
 
-// Close the statement and the database connection
-$stmt->close();
+// Get page, pageSize, status filter, and type filter from query parameters
+$page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+$pageSize = isset($_GET['pageSize']) ? intval($_GET['pageSize']) : 10;
+$statusFilter = isset($_GET['status']) ? $_GET['status'] : null;
+$typeFilter = isset($_GET['type']) ? $_GET['type'] : null;
+$kitchenDone = isset($_GET['kitchenDone']) ? $_GET['kitchenDone'] : null;
+// Get the list of orders based on the parameters
+$ordersData = getAllOrders($conn, $page, $pageSize, $statusFilter, $typeFilter, $kitchenDone);
+
+// Respond with JSON
+header('Content-Type: application/json');
+echo json_encode($ordersData, JSON_PRETTY_PRINT);
+
+// Close the database connection
 $conn->close();

@@ -14,8 +14,8 @@ function insertCustomer($conn, $customerData)
 
 function insertOrder($conn, $orderData, $customerId)
 {
-    $insertOrder = $conn->prepare("INSERT INTO orders (createdAt, type, tableNumber, customerId, status) VALUES (NOW(), ?, ?, ?, 'pending')");
-    $insertOrder->bind_param('ssi', $orderData['type'], $orderData['tableNumber'], $customerId);
+    $insertOrder = $conn->prepare("INSERT INTO orders (createdAt, type, tableNumber, customerId, instructions, status) VALUES (NOW(), ?, ?, ?, ?, 'pending')");
+    $insertOrder->bind_param('ssis', $orderData['type'], $orderData['tableNumber'], $customerId, $orderData['instructions']);
     $insertOrder->execute();
     return $conn->insert_id; // Return the ID of the newly created order
 }
@@ -27,12 +27,12 @@ function insertOrderItem($conn, $orderId, $item)
     $quantity = $item['quantity'];
 
 
-    $insertOrderItem = $conn->prepare("INSERT INTO orderItems (orderId, itemId, sizeId, quantity) VALUES (?, ?, ?, ?)");
+    $insertOrderItem = $conn->prepare("INSERT INTO orderItems (orderId, itemId, sizeId, quantity, instructions) VALUES (?, ?, ?, ?, ?)");
     if ($insertOrderItem === false) {
         echo ("Error preparing insertOrderItem statement: " . $conn->error); // Debugging line
         return null;
     }
-    $insertOrderItem->bind_param('iiii', $orderId, $itemId, $sizeId, $quantity);
+    $insertOrderItem->bind_param('iiiis', $orderId, $itemId, $sizeId, $quantity, $item['instructions']);
 
     if ($insertOrderItem->execute()) {
         $orderItemId = $conn->insert_id;
